@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrabPass in URP: replace it with the Opaque Texture · URP Migrator</title>
+<meta name="description" content="URP doesn&#x27;t support GrabPass. Replace it with _CameraOpaqueTexture and SampleSceneColor: tested before/after shader, settings and differences.">
+<link rel="canonical" href="https://nkiro33.github.io/urp-migrator-docs/guides/grabpass-in-urp.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="URP Migrator">
+<meta property="og:title" content="GrabPass in URP: replace it with the Opaque Texture · URP Migrator">
+<meta property="og:description" content="URP doesn&#x27;t support GrabPass. Replace it with _CameraOpaqueTexture and SampleSceneColor: tested before/after shader, settings and differences.">
+<meta property="og:url" content="https://nkiro33.github.io/urp-migrator-docs/guides/grabpass-in-urp.html">
+<meta property="og:image" content="https://nkiro33.github.io/urp-migrator-docs/img/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "GrabPass in URP: replace it with the Opaque Texture \u00b7 URP Migrator", "description": "URP doesn't support GrabPass. Replace it with _CameraOpaqueTexture and SampleSceneColor: tested before/after shader, settings and differences.", "url": "https://nkiro33.github.io/urp-migrator-docs/guides/grabpass-in-urp.html", "author": {"@type": "Organization", "name": "Cedar Labs"}, "dateModified": "2026-10-15"}</script>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="../index.html"><span class="logo"></span>URP Migrator</a><nav><a href='../guides/index.html'>Guides</a><a class='hide-s' href='../manual.html'>Manual</a><a class='btn' href='https://assetstore.unity.com/publishers/160610'>Asset Store</a></nav></div></header>
+<main class="wrap">
+
+<p class="kicker">Guide · Unity 6 · URP 17</p>
+<h1>GrabPass in URP: use the Opaque Texture</h1>
+<p class="lede"><code>GrabPass</code> copies the screen into a texture so a shader can distort what is behind an object: glass, water,
+heat haze. URP doesn't support <code>GrabPass</code>: the pass is ignored and the shader samples a texture that was never filled. The URP
+replacement is the <b>Opaque Texture</b>.</p>
+<div class="note"><b>Tested code.</b> Both shaders compile for Direct3D 11, Metal, Vulkan and OpenGL ES 3 (Unity 6000.0.84f1, URP 17.0.4).
+Rendered in the same scene, the URP version differs from the Built-in one by 0.94/255 on average, using URP's default Opaque Texture
+settings, in Forward, Forward+ and Deferred.</div>
+
+<h2>The Built-in shader</h2>
+<div class='code'><div class='codehead'><span>Refraction.shader (Built-in)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-hlsl'>// Guide sample: GrabPass refraction distorted by a normal map (Built-in).
+Shader &quot;Guide/Refraction (Built-in)&quot;
+{
+    Properties
+    {
+        _BumpMap (&quot;Normal Map&quot;, 2D) = &quot;bump&quot; {}
+        _Distortion (&quot;Distortion&quot;, Range(0, 0.1)) = 0.03
+        _Tint (&quot;Tint&quot;, Color) = (0.85, 0.95, 1, 1)
+    }
+    SubShader
+    {
+        Tags { &quot;Queue&quot;=&quot;Transparent&quot; &quot;RenderType&quot;=&quot;Transparent&quot; }
+        GrabPass { &quot;_BackgroundTexture&quot; }
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include &quot;UnityCG.cginc&quot;
+
+            sampler2D _BackgroundTexture;
+            sampler2D _BumpMap;
+            float4 _BumpMap_ST;
+            float _Distortion;
+            fixed4 _Tint;
+
+            struct v2f
+            {
+                float4 pos : SV_POSITION;
+                float4 grabPos : TEXCOORD0;
+                float2 uv : TEXCOORD1;
+            };
+
+            v2f vert (appdata_base v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.grabPos = ComputeGrabScreenPos(o.pos);
+                o.uv = TRANSFORM_TEX(v.texcoord, _BumpMap);
+                return o;
+            }
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                float2 offset = UnpackNormal(tex2D(_BumpMap, i.uv)).xy * _Distortion;
+                fixed4 background = tex2D(_BackgroundTexture, i.grabPos.xy / i.grabPos.w + offset);
+                return background * _Tint;
+            }
+            ENDCG
+        }
+    }
+}
+</code></pre></div>
+
+<h2>Step 1: turn on the Opaque Texture</h2>
+<p>Select your URP Asset and turn on <b>Rendering ▸ Opaque Texture</b> (a camera can also override it). URP then copies the screen into
+<code>_CameraOpaqueTexture</code> after it draws opaque objects and the skybox. <b>Opaque Downsampling</b> defaults to 2x Bilinear,
+which is cheaper but softer. Set it to None if the refraction should be sharp.</p>
+
+<h2>Step 2: rewrite the shader</h2>
+<div class='code'><div class='codehead'><span>Refraction.shader (URP)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-hlsl'>// URP version of the GrabPass refraction sample, written by hand for the docs guide.
+// Needs &quot;Opaque Texture&quot; turned on in the URP asset.
+Shader &quot;Guide/Refraction (URP)&quot;
+{
+    Properties
+    {
+        _BumpMap (&quot;Normal Map&quot;, 2D) = &quot;bump&quot; {}
+        _Distortion (&quot;Distortion&quot;, Range(0, 0.1)) = 0.03
+        _Tint (&quot;Tint&quot;, Color) = (0.85, 0.95, 1, 1)
+    }
+    SubShader
+    {
+        Tags { &quot;RenderPipeline&quot;=&quot;UniversalPipeline&quot; &quot;Queue&quot;=&quot;Transparent&quot; &quot;RenderType&quot;=&quot;Transparent&quot; }
+        Pass
+        {
+            Name &quot;Refraction&quot;
+            Tags { &quot;LightMode&quot;=&quot;UniversalForwardOnly&quot; }
+
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include &quot;Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl&quot;
+            #include &quot;Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl&quot;
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BumpMap_ST;
+                float _Distortion;
+                half4 _Tint;
+            CBUFFER_END
+            TEXTURE2D(_BumpMap);
+            SAMPLER(sampler_BumpMap);
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float2 uv         : TEXCOORD0;
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float2 uv         : TEXCOORD0;
+            };
+
+            Varyings vert (Attributes v)
+            {
+                Varyings o;
+                o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.uv = TRANSFORM_TEX(v.uv, _BumpMap);
+                return o;
+            }
+
+            half4 frag (Varyings i) : SV_Target
+            {
+                float2 offset = UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.uv)).xy * _Distortion;
+                float2 screenUV = GetNormalizedScreenSpaceUV(i.positionCS);
+                half3 background = SampleSceneColor(screenUV + offset);
+                return half4(background, 1) * _Tint;
+            }
+            ENDHLSL
+        }
+    }
+}
+</code></pre></div>
+<ul>
+<li>The <code>GrabPass</code> block goes away.</li>
+<li><code>DeclareOpaqueTexture.hlsl</code> declares the texture and <code>SampleSceneColor(uv)</code>.</li>
+<li><code>ComputeGrabScreenPos</code> and the divide by <code>w</code> become <code>GetNormalizedScreenSpaceUV(positionCS)</code> in the fragment
+shader, which also handles render scale and flipped render targets.</li>
+<li>The object stays in the <code>Transparent</code> queue so it draws after the copy is made.</li>
+</ul>
+<div class="pair">
+<figure><img src='../img/guide/G3_GrabPass_builtin.jpg' alt='Built-in GrabPass refraction' loading='lazy' width='384' height='256'><figcaption>Built-in, GrabPass</figcaption></figure>
+<figure><img src='../img/guide/G3_GrabPass_urp.jpg' alt='URP refraction using the opaque texture' loading='lazy' width='384' height='256'><figcaption>URP, Opaque Texture: 0.94/255 average difference</figcaption></figure>
+</div>
+
+<h2>What is different from GrabPass</h2>
+<ul>
+<li><b>Transparent objects aren't in the copy.</b> The Opaque Texture is made before transparent objects draw, so glass doesn't show other glass,
+particles or water behind it. A plain <code>GrabPass { }</code> grabbed the screen again for each object; in URP every object sees the same copy.</li>
+<li><b>Resolution.</b> With the default downsampling the background is half resolution and slightly blurred.</li>
+<li><b>Cost.</b> The copy is made once per camera when any camera or asset setting asks for it, whether or not a refracting object is visible.</li>
+</ul>
+<p>If transparent objects must show through the refraction, you need your own copy of the screen made after they draw, from a renderer
+feature, and a shader that samples that copy.</p>
+<p>Complete shader: <a href="../samples/RefractionURP.shader">RefractionURP.shader</a>.</p>
+<div class="cta"><p class="kicker">Have more than a handful of shaders?</p>
+<h2>Let URP Migrator do the rewrite</h2>
+<p>URP Migrator scans your project, then converts surface shaders, lit vertex/fragment shaders, GrabPass and
+<code>OnRenderImage</code> effects to URP. It keeps your <code>surf</code>, vertex and lighting functions as they are, keeps material
+property names, previews every change and backs up every file. On a 52-file test corpus, 44/44 converted shaders compile on four
+graphics APIs and 41/44 render within 2/255 of Built-in (median 0.46/255; Unity's own Standard to URP/Lit conversion
+measures 0.77/255).</p>
+<div class="buttons"><a class="btn" href="https://assetstore.unity.com/publishers/160610">URP Migrator: coming soon to the Unity Asset Store</a><a class="btn ghost" href="../index.html">How it works</a></div></div>
+<h2>More guides</h2>
+<ul><li><a href='../guides/convert-surface-shaders-to-urp.html'>How to convert surface shaders to URP</a>: Rewrite a Built-in surface shader as a URP shader: lit pass, shadows, depth, custom lighting and Forward+.</li><li><a href='../guides/onrenderimage-in-urp.html'>OnRenderImage in URP: port image effects</a>: Move OnRenderImage effects to the Full Screen Pass Renderer Feature or your own render graph pass.</li><li><a href='../guides/built-in-to-urp-checklist.html'>Built-in to URP migration checklist</a>: Everything to check when moving a project to URP before the Built-in pipeline is removed.</li></ul>
+
+</main>
+<footer><div class="wrap">URP Migrator is a Unity editor tool by Cedar Labs. Code samples on this site are MIT licensed.
+Unity and the Unity logo are trademarks of Unity Technologies; this site is not affiliated with Unity Technologies.
+· <a href="../index.html">Home</a> · <a href="../guides/index.html">Guides</a> · <a href="../manual.html">Manual</a> · <a href="https://assetstore.unity.com/publishers/160610">Asset Store</a></div></footer>
+<script>document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.code').querySelector('code').innerText;navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)})}));</script>
+</body>
+</html>

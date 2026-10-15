@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>URP Migrator: convert Built-in shaders and image effects to URP (Unity 6)</title>
+<meta name="description" content="Unity editor tool that converts surface shaders, lit vertex/fragment shaders, GrabPass and OnRenderImage image effects from the Built-in Render Pipeline to URP. Keeps materials, backs up every file.">
+<link rel="canonical" href="https://nkiro33.github.io/urp-migrator-docs/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="URP Migrator">
+<meta property="og:title" content="URP Migrator: convert Built-in shaders and image effects to URP (Unity 6)">
+<meta property="og:description" content="Unity editor tool that converts surface shaders, lit vertex/fragment shaders, GrabPass and OnRenderImage image effects from the Built-in Render Pipeline to URP. Keeps materials, backs up every file.">
+<meta property="og:url" content="https://nkiro33.github.io/urp-migrator-docs/">
+<meta property="og:image" content="https://nkiro33.github.io/urp-migrator-docs/img/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "URP Migrator: convert Built-in shaders and image effects to URP (Unity 6)", "description": "Unity editor tool that converts surface shaders, lit vertex/fragment shaders, GrabPass and OnRenderImage image effects from the Built-in Render Pipeline to URP. Keeps materials, backs up every file.", "url": "https://nkiro33.github.io/urp-migrator-docs/"}</script>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="index.html"><span class="logo"></span>URP Migrator</a><nav><a href='guides/index.html'>Guides</a><a class='hide-s' href='manual.html'>Manual</a><a class='btn' href='https://assetstore.unity.com/publishers/160610'>Asset Store</a></nav></div></header>
+<main class="wrap">
+
+<section class="hero">
+<p class="kicker">Unity editor tool · Unity 6 · URP 17</p>
+<h1>Built-in shaders, <span class="grad">working in URP.</span></h1>
+<p class="lede">URP Migrator converts surface shaders, lit vertex/fragment shaders, GrabPass and <code>OnRenderImage</code> image effects from
+the Built-in Render Pipeline to URP. It keeps your materials and backs up every file.</p>
+<div class="buttons"><a class="btn" href="https://assetstore.unity.com/publishers/160610">Coming soon to the Asset Store</a>
+<a class="btn ghost" href="manual.html">Read the manual</a><a class="btn ghost" href="guides/index.html">Free guides</a></div>
+</section>
+<div class="trio">
+<figure><img src='img/web/builtin_cover.jpg' alt='The demo scene rendered with the Built-in pipeline' loading='lazy' width='1200' height='800'><figcaption>Built-in</figcaption></figure>
+<figure><img src='img/web/urp_before_cover.jpg' alt='The same scene in URP before conversion: custom shaders render pink' loading='lazy' width='1200' height='800'><figcaption>URP, before: custom shaders render pink</figcaption></figure>
+<figure><img src='img/web/urp_after_cover.jpg' alt='The same scene in URP after conversion' loading='lazy' width='1200' height='800'><figcaption>URP, after one click</figcaption></figure>
+</div>
+
+<h2>Why</h2>
+<p>Unity is retiring the Built-in Render Pipeline: deprecated in Unity 6.5, supported in 6.7 LTS until the end of 2028, and gone in Unity 7.
+Unity's Render Pipeline Converter upgrades Unity's own materials. Surface shaders, custom lit shaders, GrabPass and image effects have to be
+rewritten by hand, and URP Migrator does that rewrite.</p>
+
+<h2>Measured, not promised</h2>
+<div class="stats">
+<div class="stat"><b>44/44</b><span>converted test shaders compile for Direct3D 11, Metal, Vulkan and OpenGL ES 3</span></div>
+<div class="stat"><b>41/44</b><span>render within 2/255 of the Built-in original, in Forward, Forward+ and Deferred</span></div>
+<div class="stat"><b>0.46/255</b><span>median pixel difference (Unity's own Standard → URP/Lit: 0.77)</span></div>
+<div class="stat"><b>4/4</b><span><code>OnRenderImage</code> effects match Built-in (0.32–0.68/255)</span></div>
+</div>
+<p>Measured on a 52-file corpus of Built-in shaders and effects written for the purpose (36 surface shaders, 11 vertex/fragment shaders, 5 image
+effects), rendered in both pipelines in the same scene. The three that differ more are listed in the <a href="manual.html#6-accuracy-measured-results">manual</a>.</p>
+<div class="pairs"><figure><div class='pair'><img src='img/web/cmp_S16_ToonRamp_builtin.jpg' alt='Custom lighting function (toon ramp), Built-in' loading='lazy' width='384' height='256'><img src='img/web/cmp_S16_ToonRamp_urp.jpg' alt='Custom lighting function (toon ramp), URP' loading='lazy' width='384' height='256'></div><figcaption>Custom lighting function (toon ramp): Built-in (left), converted for URP (right)</figcaption></figure><figure><div class='pair'><img src='img/web/cmp_S21_SnowWorldNormal_builtin.jpg' alt='World-space normals with a normal map, Built-in' loading='lazy' width='384' height='256'><img src='img/web/cmp_S21_SnowWorldNormal_urp.jpg' alt='World-space normals with a normal map, URP' loading='lazy' width='384' height='256'></div><figcaption>World-space normals with a normal map: Built-in (left), converted for URP (right)</figcaption></figure><figure><div class='pair'><img src='img/web/cmp_V07_TwoPassOutline_builtin.jpg' alt='Two-pass outline, vertex/fragment, Built-in' loading='lazy' width='384' height='256'><img src='img/web/cmp_V07_TwoPassOutline_urp.jpg' alt='Two-pass outline, vertex/fragment, URP' loading='lazy' width='384' height='256'></div><figcaption>Two-pass outline, vertex/fragment: Built-in (left), converted for URP (right)</figcaption></figure><figure><div class='pair'><img src='img/web/cmp_S06_StandardFull_builtin.jpg' alt='Standard PBR with all maps, Built-in' loading='lazy' width='384' height='256'><img src='img/web/cmp_S06_StandardFull_urp.jpg' alt='Standard PBR with all maps, URP' loading='lazy' width='384' height='256'></div><figcaption>Standard PBR with all maps: Built-in (left), converted for URP (right)</figcaption></figure></div>
+
+<h2>How it works</h2>
+<div class="grid grid4">
+<div class="card"><h3>1. Scan</h3><p>Finds every Built-in dependency (surface shaders, ForwardBase/ForwardAdd, GrabPass, OnRenderImage, command buffers, Projectors,
+Post Processing v2, <code>Shader.Find</code>, URP settings) and says what breaks and what to do. Export HTML, Markdown or CSV.</p></div>
+<div class="card"><h3>2. Preview</h3><p>See the exact line changes before anything is written, with notes on anything that will render differently.</p></div>
+<div class="card"><h3>3. Convert</h3><p>Writes URP versions of the checked files, turns on the URP settings they need, and compiles every converted shader for each graphics API.</p></div>
+<div class="card"><h3>4. Revert</h3><p>Originals are backed up outside Assets. One click restores them, with a warning if you edited a file since.</p></div>
+</div>
+<figure><img src='img/web/window-findings.jpg' alt='The URP Migrator window listing findings in a project' loading='lazy' width='1800' height='998'><figcaption>Scan results for a sample project: what breaks, how it can be fixed, and how many materials use each shader.</figcaption></figure>
+<figure><img src='img/web/window-preview.jpg' alt='Line-by-line preview of a surface shader conversion' loading='lazy' width='1800' height='1079'><figcaption>Preview of a conversion before anything is written.</figcaption></figure>
+
+<h2>Image effects keep working</h2>
+<p>Each <code>OnRenderImage</code> script gets a URP version of the method, and one renderer feature runs them all. Blit chains, temporaries,
+<code>[ImageEffectOpaque]</code> and depth requests are supported. The script still works in the Built-in pipeline.</p>
+<div class="pairs"><figure><img src='img/web/E01_Grayscale.jpg' alt='Grayscale: one blit: Built-in and URP' loading='lazy' width='776' height='256'><figcaption>Grayscale: one blit: Built-in (left), URP (right)</figcaption></figure><figure><img src='img/web/E02_Blur.jpg' alt='Blur: temporaries and several passes: Built-in and URP' loading='lazy' width='776' height='256'><figcaption>Blur: temporaries and several passes: Built-in (left), URP (right)</figcaption></figure><figure><img src='img/web/E03_DepthFog.jpg' alt='Depth fog: [ImageEffectOpaque] and the depth texture: Built-in and URP' loading='lazy' width='776' height='256'><figcaption>Depth fog: [ImageEffectOpaque] and the depth texture: Built-in (left), URP (right)</figcaption></figure><figure><img src='img/web/E04_Vignette.jpg' alt='Vignette: Built-in and URP' loading='lazy' width='776' height='256'><figcaption>Vignette: Built-in (left), URP (right)</figcaption></figure></div>
+
+<h2>What it handles</h2>
+<div class="grid">
+<div class="card"><h3>Surface shaders</h3><p>Standard, StandardSpecular, Lambert, BlinnPhong and custom lighting functions (called per light);
+<code>vertex:</code>, <code>finalcolor:</code>, <code>alpha:fade</code>/<code>premul</code>, <code>alphatest</code>, <code>decal</code>, <code>addshadow</code>;
+<code>Input</code> members such as <code>uv_</code>, <code>uv2_</code>, <code>worldPos</code>, <code>worldNormal</code>, <code>viewDir</code>,
+<code>worldRefl</code>, <code>screenPos</code>, <code>COLOR</code>, <code>VFACE</code> and <code>INTERNAL_DATA</code>.</p></div>
+<div class="card"><h3>Vertex/fragment shaders</h3><p>UnityCG, Lighting, AutoLight and PBS functions and macros; ForwardBase to URP;
+ForwardAdd merged into the light loop; Built-in shadow macros; GrabPass to the Opaque Texture; shadow and depth passes from
+<code>Fallback</code>/<code>UsePass</code>.</p></div>
+<div class="card"><h3>Image effects</h3><p><code>OnRenderImage</code> to a URP version of the method; <code>Graphics.Blit</code> chains,
+temporaries and global shader values; <code>[ImageEffectOpaque]</code>; Scene view; depth texture requests.</p></div>
+<div class="card"><h3>Every converted shader</h3><p>URP Forward, Forward+ and Deferred; shadows, additional lights, light layers, SSAO,
+decals, lightmaps, fog and instancing; SRP Batcher compatible; no dependency on URP Migrator.</p></div>
+<div class="card"><h3>Reports</h3><p>HTML, Markdown and CSV. Also lists Projectors, command buffers, <code>OnPreRender</code>/<code>OnPostRender</code>,
+replacement shaders, Post Processing v2, Halo and Lens Flare, and <code>Shader.Find</code>, each with what to do.</p></div>
+<div class="card"><h3>Workflow</h3><p>Preview, automatic backups, one-click revert, a compile check per graphics API, a command line for CI,
+and optional dual-pipeline shaders.</p></div>
+</div>
+<div class="note warn"><b>Not converted automatically</b> (reported with steps): tessellation (the shader converts without it, with a
+warning), camera command buffers and <code>OnPreRender</code>/<code>OnPostRender</code>, Projectors (URP uses Decal Projectors) and Post
+Processing v2 profiles (Unity's Render Pipeline Converter handles these). Point and spot lights use URP's light falloff, as every URP shader does.</div>
+
+<h2>Requirements</h2>
+<ul><li>Unity 6 (6000.0 or later); tested on 6000.0.84f1.</li><li>Universal RP 17.0 or later for converting. Scanning works without URP.</li>
+<li>Editor tool. The only runtime code is a small assembly that runs converted image effects.</li></ul>
+
+<h2>Questions</h2>
+<h3>Will my materials break?</h3><p>No. A converted shader keeps its file, name and property names, so materials, prefabs and scripts keep working.</p><h3>Do I still need Unity's Render Pipeline Converter?</h3><p>Yes, for Unity's own materials (Standard, Legacy, Mobile, Particles). URP Migrator handles the custom shaders and effects that Unity's converter skips, and opens Unity's converter for the rest.</p><h3>Can one shader support both pipelines?</h3><p>Yes. With “Keep the Built-in SubShader” on, the converted shader keeps the original SubShader too and works in both.</p><h3>Does it need to stay installed?</h3><p>Converted shaders are self-contained. Converted image effects need the small runtime folder.</p><h3>What does it not convert?</h3><p>Tessellation (the shader converts without it, with a warning), camera command buffers and OnPreRender/OnPostRender, Projectors and Post Processing v2 profiles. These are reported with what to do.</p>
+
+<div class="cta"><h2>Free guides</h2><p>Converting by hand? These cover the same ground with tested code:</p>
+<ul><li><a href='guides/convert-surface-shaders-to-urp.html'>How to convert surface shaders to URP</a></li><li><a href='guides/grabpass-in-urp.html'>GrabPass in URP: use the Opaque Texture</a></li><li><a href='guides/onrenderimage-in-urp.html'>OnRenderImage in URP: port image effects</a></li><li><a href='guides/built-in-to-urp-checklist.html'>Built-in to URP migration checklist</a></li></ul>
+<div class="buttons"><a class="btn" href="https://assetstore.unity.com/publishers/160610">URP Migrator: coming soon to the Unity Asset Store</a></div></div>
+
+</main>
+<footer><div class="wrap">URP Migrator is a Unity editor tool by Cedar Labs. Code samples on this site are MIT licensed.
+Unity and the Unity logo are trademarks of Unity Technologies; this site is not affiliated with Unity Technologies.
+· <a href="index.html">Home</a> · <a href="guides/index.html">Guides</a> · <a href="manual.html">Manual</a> · <a href="https://assetstore.unity.com/publishers/160610">Asset Store</a></div></footer>
+<script>document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.code').querySelector('code').innerText;navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)})}));</script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnRenderImage in URP: how to port image effects (Unity 6) · URP Migrator</title>
+<meta name="description" content="OnRenderImage is never called in URP. Port Built-in image effects with the Full Screen Pass Renderer Feature or a render graph renderer feature. Tested code.">
+<link rel="canonical" href="https://nkiro33.github.io/urp-migrator-docs/guides/onrenderimage-in-urp.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="URP Migrator">
+<meta property="og:title" content="OnRenderImage in URP: how to port image effects (Unity 6) · URP Migrator">
+<meta property="og:description" content="OnRenderImage is never called in URP. Port Built-in image effects with the Full Screen Pass Renderer Feature or a render graph renderer feature. Tested code.">
+<meta property="og:url" content="https://nkiro33.github.io/urp-migrator-docs/guides/onrenderimage-in-urp.html">
+<meta property="og:image" content="https://nkiro33.github.io/urp-migrator-docs/img/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "OnRenderImage in URP: how to port image effects (Unity 6) \u00b7 URP Migrator", "description": "OnRenderImage is never called in URP. Port Built-in image effects with the Full Screen Pass Renderer Feature or a render graph renderer feature. Tested code.", "url": "https://nkiro33.github.io/urp-migrator-docs/guides/onrenderimage-in-urp.html", "author": {"@type": "Organization", "name": "Cedar Labs"}, "dateModified": "2026-10-15"}</script>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="../index.html"><span class="logo"></span>URP Migrator</a><nav><a href='../guides/index.html'>Guides</a><a class='hide-s' href='../manual.html'>Manual</a><a class='btn' href='https://assetstore.unity.com/publishers/160610'>Asset Store</a></nav></div></header>
+<main class="wrap">
+
+<p class="kicker">Guide · Unity 6 · URP 17</p>
+<h1>OnRenderImage in URP: port your image effects</h1>
+<p class="lede">In the Built-in pipeline, a script on the camera with <code>OnRenderImage(source, destination)</code> post-processes the
+frame with <code>Graphics.Blit</code>. URP never calls <code>OnRenderImage</code>, so these effects silently stop working. The same goes for
+<code>OnPreRender</code>, <code>OnPostRender</code> and command buffers added with <code>Camera.AddCommandBuffer</code>.</p>
+<div class="note"><b>Tested code.</b> The scripts and shaders compile on Unity 6000.0.84f1 with URP 17.0.4. Both URP options below produce the
+same image as the Built-in effect: 0.00/255 difference for the renderer feature and 0.00/255 for the Full Screen Pass
+(the effect itself changes the image by 26.20/255 on average).</div>
+
+<h2>The Built-in effect</h2>
+<div class='code'><div class='codehead'><span>VignetteEffect.cs (Built-in)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-csharp'>using UnityEngine;
+
+// Built-in image effect: Unity calls OnRenderImage after the camera renders.
+[ExecuteAlways, RequireComponent(typeof(Camera))]
+public class VignetteEffect : MonoBehaviour
+{
+    public Material material;   // uses &quot;Guide/Vignette (Built-in)&quot;
+    [Range(0, 1)] public float intensity = 0.5f;
+
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        material.SetFloat(&quot;_Intensity&quot;, intensity);
+        Graphics.Blit(source, destination, material);
+    }
+}
+</code></pre></div>
+<div class='code'><div class='codehead'><span>Vignette shader (Built-in)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-hlsl'>Shader &quot;Guide/Vignette (Built-in)&quot;
+{
+    Properties
+    {
+        _MainTex (&quot;Texture&quot;, 2D) = &quot;white&quot; {}
+        _Intensity (&quot;Intensity&quot;, Range(0, 1)) = 0.5
+    }
+    SubShader
+    {
+        ZTest Always Cull Off ZWrite Off
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            #include &quot;UnityCG.cginc&quot;
+
+            sampler2D _MainTex;
+            float _Intensity;
+
+            fixed4 frag (v2f_img i) : SV_Target
+            {
+                fixed4 color = tex2D(_MainTex, i.uv);
+                float2 d = i.uv - 0.5;
+                color.rgb *= saturate(1.0 - dot(d, d) * _Intensity * 2.0);
+                return color;
+            }
+            ENDCG
+        }
+    }
+}
+</code></pre></div>
+
+<h2>Step 1: port the shader</h2>
+<p>Both URP options draw a full-screen triangle with your material and pass the camera image in as <code>_BlitTexture</code>.
+<code>Blit.hlsl</code> provides the vertex shader (<code>Vert</code>), the <code>Varyings</code> struct and the texture:</p>
+<div class='code'><div class='codehead'><span>Vignette shader (URP)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-hlsl'>Shader &quot;Guide/Vignette (URP)&quot;
+{
+    Properties
+    {
+        _Intensity (&quot;Intensity&quot;, Range(0, 1)) = 0.5
+    }
+    SubShader
+    {
+        Tags { &quot;RenderPipeline&quot;=&quot;UniversalPipeline&quot; }
+        ZTest Always Cull Off ZWrite Off
+        Pass
+        {
+            Name &quot;Vignette&quot;
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #include &quot;Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl&quot;
+            // Full-screen triangle vertex shader (Vert) and the source texture (_BlitTexture).
+            #include &quot;Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl&quot;
+
+            float _Intensity;
+
+            half4 Frag (Varyings input) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                float2 uv = input.texcoord;
+                half4 color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
+                float2 d = uv - 0.5;
+                color.rgb *= saturate(1.0 - dot(d, d) * _Intensity * 2.0);
+                return color;
+            }
+            ENDHLSL
+        }
+    }
+}
+</code></pre></div>
+<table>
+<tr><th>Built-in</th><th>URP</th></tr>
+<tr><td><code>#pragma vertex vert_img</code>, <code>v2f_img</code></td><td><code>#pragma vertex Vert</code>, <code>Varyings</code> (from <code>Blit.hlsl</code>)</td></tr>
+<tr><td><code>sampler2D _MainTex;</code> <code>tex2D(_MainTex, i.uv)</code></td><td><code>SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord)</code></td></tr>
+<tr><td><code>#include "UnityCG.cginc"</code></td><td><code>Core.hlsl</code> + <code>Blit.hlsl</code></td></tr>
+</table>
+
+<h2>Option A: Full Screen Pass Renderer Feature (no code)</h2>
+<ol>
+<li>Create a material with the URP shader.</li>
+<li>Select your Universal Renderer asset and click <b>Add Renderer Feature ▸ Full Screen Pass Renderer Feature</b>.</li>
+<li>Set <b>Pass Material</b> to the material and <b>Injection Point</b> to <i>Before Rendering Post Processing</i>. Leave <b>Fetch Color
+Buffer</b> on. If the shader reads depth or normals, tick them under <b>Requirements</b>.</li>
+<li>Delete the old script from the camera. Change the effect through the material (a script can set values on it at runtime).</li>
+</ol>
+<p>This is the quickest route for one-pass effects. It runs for every camera using that renderer, and it can't run several passes with
+temporary textures the way a <code>Graphics.Blit</code> chain can.</p>
+
+<h2>Option B: your own renderer feature</h2>
+<p>For per-feature settings, several passes, or more control, write a renderer feature. This one uses Unity 6's render graph API:</p>
+<div class='code'><div class='codehead'><span>VignetteFeature.cs (URP)</span><button class='copy' type='button'>Copy</button></div><pre><code class='lang-csharp'>using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.RenderGraphModule;
+using UnityEngine.Rendering.RenderGraphModule.Util;
+using UnityEngine.Rendering.Universal;
+
+// URP replacement for the VignetteEffect OnRenderImage script: add it to the URP Renderer asset.
+public class VignetteFeature : ScriptableRendererFeature
+{
+    public Material material;   // uses &quot;Guide/Vignette (URP)&quot;
+    [Range(0, 1)] public float intensity = 0.5f;
+
+    VignettePass m_Pass;
+
+    public override void Create()
+    {
+        m_Pass = new VignettePass { renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing };
+    }
+
+    public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
+    {
+        if (material == null) return;
+        material.SetFloat(&quot;_Intensity&quot;, intensity);
+        m_Pass.material = material;
+        renderer.EnqueuePass(m_Pass);
+    }
+
+    class VignettePass : ScriptableRenderPass
+    {
+        public Material material;
+
+        public VignettePass()
+        {
+            // The pass reads the camera color, so URP must render to a texture, not straight to the screen.
+            requiresIntermediateTexture = true;
+        }
+
+        public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
+        {
+            var resources = frameData.Get&lt;UniversalResourceData&gt;();
+            if (resources.isActiveTargetBackBuffer) return;
+
+            // source -&gt; material -&gt; new texture, which then becomes the camera color for later passes.
+            TextureHandle source = resources.activeColorTexture;
+            TextureDesc desc = renderGraph.GetTextureDesc(source);
+            desc.name = &quot;Vignette&quot;;
+            desc.clearBuffer = false;
+            TextureHandle destination = renderGraph.CreateTexture(desc);
+
+            renderGraph.AddBlitPass(new RenderGraphUtils.BlitMaterialParameters(source, destination, material, 0), &quot;Vignette&quot;);
+            resources.cameraColor = destination;
+        }
+    }
+}
+</code></pre></div>
+<ul>
+<li><code>requiresIntermediateTexture</code> makes URP render the camera into a texture you can read.</li>
+<li><code>AddBlitPass</code> draws the material from <code>source</code> into a new texture, and setting <code>resources.cameraColor</code> makes
+later passes (post-processing, UI) use the result. For a multi-pass effect, chain blits through more textures from <code>renderGraph.CreateTexture</code>.</li>
+<li>An effect marked <code>[ImageEffectOpaque]</code> becomes <code>RenderPassEvent.BeforeRenderingTransparents</code>. If the shader reads
+<code>_CameraDepthTexture</code>, call <code>ConfigureInput(ScriptableRenderPassInput.Depth)</code> on the pass.</li>
+<li>If your project has the render graph turned off (Compatibility Mode in URP's Graphics settings), URP calls the older <code>Execute</code>
+method instead, so a feature for that mode needs one.</li>
+<li>Don't call your class <code>Vignette</code>: URP already has a <code>Vignette</code> volume component, and the names clash in scripts
+that use <code>UnityEngine.Rendering.Universal</code>.</li>
+</ul>
+<p>Add it with <b>Add Renderer Feature ▸ Vignette Feature</b> on the Universal Renderer asset. Downloads:
+<a href="../samples/VignetteFeature.cs">VignetteFeature.cs</a>, <a href="../samples/VignetteURP.shader">VignetteURP.shader</a>.</p>
+
+<h2>Option C: keep your OnRenderImage code</h2>
+<p><a href="../index.html">URP Migrator</a> converts <code>OnRenderImage</code> scripts without rewriting them. It adds a URP version of the
+method that runs your existing <code>Graphics.Blit</code> chain (temporaries, several passes, material changes between blits) through one renderer
+feature, and the script keeps working in the Built-in pipeline. In its tests, four effects (single blit, multi-pass blur, depth fog with
+<code>[ImageEffectOpaque]</code>, vignette) match the Built-in images within 0.32 to 0.68/255.</p>
+<div class="cta"><p class="kicker">Have more than a handful of shaders?</p>
+<h2>Let URP Migrator do the rewrite</h2>
+<p>URP Migrator scans your project, then converts surface shaders, lit vertex/fragment shaders, GrabPass and
+<code>OnRenderImage</code> effects to URP. It keeps your <code>surf</code>, vertex and lighting functions as they are, keeps material
+property names, previews every change and backs up every file. On a 52-file test corpus, 44/44 converted shaders compile on four
+graphics APIs and 41/44 render within 2/255 of Built-in (median 0.46/255; Unity's own Standard to URP/Lit conversion
+measures 0.77/255).</p>
+<div class="buttons"><a class="btn" href="https://assetstore.unity.com/publishers/160610">URP Migrator: coming soon to the Unity Asset Store</a><a class="btn ghost" href="../index.html">How it works</a></div></div>
+<h2>More guides</h2>
+<ul><li><a href='../guides/convert-surface-shaders-to-urp.html'>How to convert surface shaders to URP</a>: Rewrite a Built-in surface shader as a URP shader: lit pass, shadows, depth, custom lighting and Forward+.</li><li><a href='../guides/grabpass-in-urp.html'>GrabPass in URP: use the Opaque Texture</a>: Replace GrabPass with _CameraOpaqueTexture and SampleSceneColor, and the differences to watch for.</li><li><a href='../guides/built-in-to-urp-checklist.html'>Built-in to URP migration checklist</a>: Everything to check when moving a project to URP before the Built-in pipeline is removed.</li></ul>
+
+</main>
+<footer><div class="wrap">URP Migrator is a Unity editor tool by Cedar Labs. Code samples on this site are MIT licensed.
+Unity and the Unity logo are trademarks of Unity Technologies; this site is not affiliated with Unity Technologies.
+· <a href="../index.html">Home</a> · <a href="../guides/index.html">Guides</a> · <a href="../manual.html">Manual</a> · <a href="https://assetstore.unity.com/publishers/160610">Asset Store</a></div></footer>
+<script>document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.code').querySelector('code').innerText;navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)})}));</script>
+</body>
+</html>

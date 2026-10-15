@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Built-in to URP migration checklist (Unity 6) · URP Migrator</title>
+<meta name="description" content="Unity is deprecating the Built-in Render Pipeline. A practical checklist for moving a project to URP: settings, materials, custom shaders, image effects, lighting and cameras.">
+<link rel="canonical" href="https://nkiro33.github.io/urp-migrator-docs/guides/built-in-to-urp-checklist.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="URP Migrator">
+<meta property="og:title" content="Built-in to URP migration checklist (Unity 6) · URP Migrator">
+<meta property="og:description" content="Unity is deprecating the Built-in Render Pipeline. A practical checklist for moving a project to URP: settings, materials, custom shaders, image effects, lighting and cameras.">
+<meta property="og:url" content="https://nkiro33.github.io/urp-migrator-docs/guides/built-in-to-urp-checklist.html">
+<meta property="og:image" content="https://nkiro33.github.io/urp-migrator-docs/img/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icon.png">
+<link rel="stylesheet" href="../style.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Built-in to URP migration checklist (Unity 6) \u00b7 URP Migrator", "description": "Unity is deprecating the Built-in Render Pipeline. A practical checklist for moving a project to URP: settings, materials, custom shaders, image effects, lighting and cameras.", "url": "https://nkiro33.github.io/urp-migrator-docs/guides/built-in-to-urp-checklist.html", "author": {"@type": "Organization", "name": "Cedar Labs"}, "dateModified": "2026-10-15"}</script>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="../index.html"><span class="logo"></span>URP Migrator</a><nav><a href='../guides/index.html'>Guides</a><a class='hide-s' href='../manual.html'>Manual</a><a class='btn' href='https://assetstore.unity.com/publishers/160610'>Asset Store</a></nav></div></header>
+<main class="wrap">
+
+<p class="kicker">Guide · Unity 6</p>
+<h1>Built-in to URP migration checklist</h1>
+<p class="lede">Unity is retiring the Built-in Render Pipeline. Its <a href="https://discussions.unity.com/t/render-pipelines-strategy-for-2026/1710004">render
+pipeline strategy for 2026</a> deprecates it in Unity 6.5 with support in the 6.7 LTS until the end of 2028, and
+<a href="https://discussions.unity.com/t/the-path-to-a-single-render-pipeline-in-unity-7/1737908">the path to a single render pipeline in
+Unity 7</a> makes it obsolete in Unity 7. This checklist covers what changes when a project moves to URP, in the order that causes the least rework.</p>
+
+<h2>1. Before you start</h2>
+<ul>
+<li>Commit everything to version control, or make a copy of the project.</li>
+<li>List what will break. Search for <code>#pragma surface</code>, <code>GrabPass</code>, <code>OnRenderImage</code>, <code>OnPreRender</code>,
+<code>OnPostRender</code>, <code>AddCommandBuffer</code>, <code>Projector</code>, <code>SetReplacementShader</code>, and <code>Shader.Find</code>
+calls with Built-in shader names. <a href="../index.html">URP Migrator</a>'s scan produces this list with what to do for each item, as an
+HTML, Markdown or CSV report.</li>
+<li>Note the custom shaders that read <code>_CameraDepthTexture</code> or <code>_LightColor0</code>: they need URP settings or code changes.</li>
+</ul>
+
+<h2>2. Install URP and create the pipeline asset</h2>
+<ol>
+<li>Install <b>Universal RP</b> from the Package Manager.</li>
+<li>Create a URP Asset (with Universal Renderer) from <b>Assets ▸ Create ▸ Rendering ▸ URP Asset (with Universal Renderer)</b>.</li>
+<li>Assign it in <b>Project Settings ▸ Graphics ▸ Default Render Pipeline</b> and in every level of <b>Project Settings ▸ Quality</b>
+that should use it.</li>
+<li>Shadow distance, cascades and resolution now live on the URP Asset, not in the Quality settings. Set them again.</li>
+</ol>
+
+<h2>3. Convert Unity's own materials</h2>
+<p>Open <b>Window ▸ Rendering ▸ Render Pipeline Converter</b>, pick <i>Built-in to URP</i>, and run the converters you need: rendering settings,
+material upgrade (Standard, Legacy, Mobile and Particles shaders to their URP versions), read-only materials, animation clips, and Post
+Processing Stack v2 profiles if you use that package. This step does <b>not</b> touch materials that use your own shaders.</p>
+
+<h2>4. Convert custom shaders</h2>
+<ul>
+<li>Surface shaders: <a href="../guides/convert-surface-shaders-to-urp.html">How to convert surface shaders to URP</a>.</li>
+<li>Vertex/fragment shaders that use <code>ForwardBase</code>/<code>ForwardAdd</code>, <code>_LightColor0</code> or Built-in shadow macros: same
+approach (a <code>UniversalForwardOnly</code> pass with URP's <code>Light</code> functions, plus shadow and depth passes).</li>
+<li>Unlit vertex/fragment shaders without a LightMode tag usually work in URP unchanged. They are not SRP Batcher compatible until their properties
+move into <code>UnityPerMaterial</code>.</li>
+<li>GrabPass: <a href="../guides/grabpass-in-urp.html">GrabPass in URP</a>.</li>
+<li>Shaders that read <code>_CameraDepthTexture</code>: turn on <b>Depth Texture</b> on the URP Asset. Shaders in the transparent queue that
+read depth also need the renderer's <b>Depth Texture Mode</b> set to <i>After Opaques</i>.</li>
+</ul>
+
+<h2>5. Image effects and camera scripts</h2>
+<ul>
+<li><code>OnRenderImage</code> effects: <a href="../guides/onrenderimage-in-urp.html">OnRenderImage in URP</a>.</li>
+<li>Post Processing Stack v2: use URP's Volume system (Bloom, Color Adjustments, Vignette, Depth of Field…).</li>
+<li><code>OnPreRender</code>/<code>OnPostRender</code> and camera command buffers: move the work into a renderer feature, or use
+<code>RenderPipelineManager.beginCameraRendering</code>/<code>endCameraRendering</code> for code that only sets state.</li>
+<li>Replacement shaders: use a <b>Render Objects</b> renderer feature with an override material.</li>
+<li>Several cameras layered by depth: use <b>Camera Stacking</b> (one Base camera with Overlay cameras).</li>
+</ul>
+
+<h2>6. Lighting and visuals</h2>
+<ul>
+<li>Point and spot lights fall off differently in URP (a physically based curve), so retune their range and intensity.</li>
+<li>URP limits lights per object (set on the URP Asset). Forward+ removes that limit.</li>
+<li>Rebake lightmaps, light probes and reflection probes.</li>
+<li>Projectors don't render in URP: use the <b>Decal Projector</b> with the Decal renderer feature.</li>
+<li>Halo and the Built-in Lens Flare component don't render: use <b>Lens Flare (SRP)</b>.</li>
+</ul>
+
+<h2>7. Check everything</h2>
+<ul>
+<li>Look for pink materials in every scene and prefab (Console errors point to shader problems).</li>
+<li>Check with point lights, shadows, fog and lightmaps, and in the rendering path you ship (Forward, Forward+ or Deferred).</li>
+<li>Use the Frame Debugger to check SRP Batcher batches and that renderer features run.</li>
+<li>Build for every target platform; shader compile errors can be platform-specific.</li>
+</ul>
+<div class="cta"><p class="kicker">Have more than a handful of shaders?</p>
+<h2>Let URP Migrator do the rewrite</h2>
+<p>URP Migrator scans your project, then converts surface shaders, lit vertex/fragment shaders, GrabPass and
+<code>OnRenderImage</code> effects to URP. It keeps your <code>surf</code>, vertex and lighting functions as they are, keeps material
+property names, previews every change and backs up every file. On a 52-file test corpus, 44/44 converted shaders compile on four
+graphics APIs and 41/44 render within 2/255 of Built-in (median 0.46/255; Unity's own Standard to URP/Lit conversion
+measures 0.77/255).</p>
+<div class="buttons"><a class="btn" href="https://assetstore.unity.com/publishers/160610">URP Migrator: coming soon to the Unity Asset Store</a><a class="btn ghost" href="../index.html">How it works</a></div></div>
+<h2>Guides</h2>
+<ul><li><a href='../guides/convert-surface-shaders-to-urp.html'>How to convert surface shaders to URP</a>: Rewrite a Built-in surface shader as a URP shader: lit pass, shadows, depth, custom lighting and Forward+.</li><li><a href='../guides/grabpass-in-urp.html'>GrabPass in URP: use the Opaque Texture</a>: Replace GrabPass with _CameraOpaqueTexture and SampleSceneColor, and the differences to watch for.</li><li><a href='../guides/onrenderimage-in-urp.html'>OnRenderImage in URP: port image effects</a>: Move OnRenderImage effects to the Full Screen Pass Renderer Feature or your own render graph pass.</li></ul>
+
+</main>
+<footer><div class="wrap">URP Migrator is a Unity editor tool by Cedar Labs. Code samples on this site are MIT licensed.
+Unity and the Unity logo are trademarks of Unity Technologies; this site is not affiliated with Unity Technologies.
+· <a href="../index.html">Home</a> · <a href="../guides/index.html">Guides</a> · <a href="../manual.html">Manual</a> · <a href="https://assetstore.unity.com/publishers/160610">Asset Store</a></div></footer>
+<script>document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>{const t=b.closest('.code').querySelector('code').innerText;navigator.clipboard.writeText(t).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1500)})}));</script>
+</body>
+</html>
